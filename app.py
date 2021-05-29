@@ -4,12 +4,11 @@ import re
 import pandas as pd
 import numpy as np
 import geopandas
-from pandas.core.indexing import check_bool_indexer
 from shapely.geometry import Point
 from datetime import datetime
 import json
 import pymssql as py
-#import pyodbc as py
+
 
 
   
@@ -30,8 +29,6 @@ password = "xxx123##"
 #conn = py.connect('DRIVER={SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password) 
 conn = py.connect(server,username,password,database)
 
-
-
 @app.route("/")
 #sulla pagina /login si fa metodo get post per passare le informazioni da html a python, in questo caso bisogna usare il post
 @app.route('/login', methods =['GET', 'POST'])
@@ -48,7 +45,7 @@ def login():
         cursor = conn.cursor()
         #query che dice username e la password assegnati prima andranni ad essere assegnati ai specifici campi username e password
         #-----
-        cursor.execute('SELECT * FROM accounts WHERE username =%s AND password = %s', (username, password, ))
+        cursor.execute('SELECT * FROM accounts WHERE username = %s AND password = %s', (username, password, ))
         account = cursor.fetchone()
         if account:
             #se il login è riouscto 
@@ -72,9 +69,10 @@ def login():
 
             conn.commit()
 
-            
-
-            
+            cursor.execute('SELECT TOP 1 * FROM dbo.prova_log WHERE ID_UTENTE = (%s) ORDER BY data DESC,tempo_iniziale DESC' , (session['id']))
+            global id_prova_log
+            id_prova_log = cursor.fetchone()
+            print("id del log: " ,id_prova_log[0])
 
 
 
@@ -84,8 +82,8 @@ def login():
             #return render_template('index.html', msg = msg)
 
             #questo permette di fare il redirect url_for ad una pagna https perchè di standard l'url for lo fa ad una pagina http
-            #return redirect(url_for("cookie",_external=True,_scheme='https'))
-            return redirect(url_for("cookie"))
+            return redirect(url_for("cookie",_external=True,_scheme='https'))
+            #return redirect(url_for("cookie"))
 
         else:
             #caso contrario messaggio normale di errore e passa anche questo per farlo vedere su html solo se vogliamo mettere online il sito
@@ -97,41 +95,33 @@ def login():
 
 @app.route("/login_amministrator",methods=["GET","POST"])
 def login_amministrator():
-    try:
-        
-        #si inizializza un messaggio per poi andare a dire nell'if quando riuscito che il log è andato a buon fine
-        msg = ''
-        global check
-        check = False
-        
-        #se utilizziamo il post (e si utilizza quello per prendere informazioni) questo request form avrà sia username che password
-        if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
-            #andiamo ad assegnare lo username e la password alle variabili interessate che poi andiamo a gestire
-            username = request.form['username']
-            password = request.form['password']
-            #creaiamo un cursore che andrà a ascalare tutto quello che gli diciamo come un cursore vero
-            cursor = conn.cursor()
-            #query che dice username e la password assegnati prima andranni ad essere assegnati ai specifici campi username e password
-            cursor.execute('SELECT * FROM dbo.amministrator WHERE username = %s AND password = %s', (username, password, ))
-            account = cursor.fetchone()
-            if account:
-                #se il login è riouscto 
-                check = True
-                session['loggedin'] = True
-                #se l'id matcha con la prima colonna che ho su sql questo è un array
-                session['id'] = account[0]
-                #stessa cosa con l'usernaname per il numero della colonna quindi bisogna fare un match tra quello scritto sull db e quello scritto adesso dall'utente nel login
-                session['username'] = account[1]
-                #se tutto va a buon fine il messaggio sarà quello che poi verrà ripreso su html tramite il render_template
+     #si inizializza un messaggio per poi andare a dire nell'if quando riuscito che il log è andato a buon fine
+    msg = ''
+    #se utilizziamo il post (e si utilizza quello per prendere informazioni) questo request form avrà sia username che password
+    if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
+        #andiamo ad assegnare lo username e la password alle variabili interessate che poi andiamo a gestire
+        username = request.form['username']
+        password = request.form['password']
+        #creaiamo un cursore che andrà a ascalare tutto quello che gli diciamo come un cursore vero
+        cursor = conn.cursor()
+        #query che dice username e la password assegnati prima andranni ad essere assegnati ai specifici campi username e password
+        cursor.execute('SELECT * FROM dbo.amministrator WHERE username = %s AND password = %s', (username, password, ))
+        account = cursor.fetchone()
+        if account:
+            #se il login è riouscto 
+            session['loggedin'] = True
+            #se l'id matcha con la prima colonna che ho su sql questo è un array
+            session['id'] = account[0]
+            #stessa cosa con l'usernaname per il numero della colonna quindi bisogna fare un match tra quello scritto sull db e quello scritto adesso dall'utente nel login
+            session['username'] = account[1]
+            #se tutto va a buon fine il messaggio sarà quello che poi verrà ripreso su html tramite il render_template
 
-                return redirect(url_for("graph_accounts_amministrator"))
+            return redirect(url_for("graph_accounts_amministrator"))
 
-            else:
-                #caso contrario messaggio normale di errore e passa anche questo per farlo vedere su html solo se vogliamo mettere online il sito
-                msg = 'Incorrect username / password !'
-        return render_template('amministrator/login-amministrator.html', msg = msg)
-    except:
-        return redirect(url_for("login_amministrator"))
+        else:
+            #caso contrario messaggio normale di errore e passa anche questo per farlo vedere su html solo se vogliamo mettere online il sito
+            msg = 'Incorrect username / password !'
+    return render_template('amministrator/login-amministrator.html', msg = msg)
 
 @app.route("/graph_accounts_amministrator")
 def graph_accounts_amministrator():
@@ -144,7 +134,7 @@ INNER JOIN dbo.ProvapuntiSomministrazioneVaccini ON dbo.Select_utente.ID_PUNTO_V
 """)
     data = cursor.fetchall()
 
-    return render_template("amministrator/accounts.html", data = data,check = check)
+    return render_template("amministrator/accounts.html", data = data)
 
 @app.route("/cookie")
 def cookie():
@@ -153,15 +143,9 @@ def cookie():
 @app.route("/index",methods=["GET","POST"])
 def index():
 
-    try:
+   # try:
         cursor = conn.cursor()
-
-        #global id_prova_log
-        cursor.execute('SELECT TOP 1 * FROM dbo.prova_log WHERE ID_UTENTE = (%s) ORDER BY data DESC,tempo_iniziale DESC' , (session['id']))
-        id_prova_log = cursor.fetchone()
-        print("id del log: " ,id_prova_log[0])
-
-
+        
 
         #richiesta della tabella a sql server
         query_somm_vacc = 'SELECT * FROM dbo.ProvapuntiSomministrazioneVaccini'
@@ -177,6 +161,10 @@ def index():
 
         cursor.execute('UPDATE dbo.prova_log  SET lat_utente = (%s),lon_utente = (%s) WHERE ID = (%s)',(lat,lon,id_prova_log[0]))
         conn.commit()
+
+
+
+
 
         #posizione serve per passare le coordinate a js per fa uscire il marker verde che saremmo il device
         posizione = [lat,lon]
@@ -203,7 +191,7 @@ def index():
         for cord in coordiante:
             result += "[" + str(cord[1]) + "," + str(cord[0]) + ","  + '"'  + str(cord[2]) + '"' + "],"
 
-        #la lunghezza di result - l'ultimo carattere che è la virgola che non mi serve più le quadre è per l'array muldidimansionale
+    #la lunghezza di result - l'ultimo carattere che è la virgola che non mi serve più le quadre è per l'array muldidimansionale
         result = "[" + result[0:len(result) -1] + "]"
 
 
@@ -216,7 +204,7 @@ def index():
             information = information
             information = json.loads(information)
             lat,lon = information['lat'],information['lng'] 
-            print(lat,lon)
+            #print(lat,lon)
             cursor.execute('SELECT * FROM dbo.ProvapuntiSomministrazioneVaccini WHERE lat = (%s) AND lng = (%s) ',(lat,lon))
             id_punto = cursor.fetchone()
             #id_punto = int(id_punto)
@@ -224,18 +212,17 @@ def index():
             conn.commit()
             print("riuscita")
 
-
+        
 
 
         return render_template("index.html" , posizione = posizione, x = result,dimensione = dimensione)
 
-    except:
+    #except:
 
-        return redirect(url_for("login"))
+     #   return redirect(url_for("login"))
 
 @app.route('/logout')
 def logout():
-    
     cursor = conn.cursor()
     df_tempo_finale = datetime.now().strftime("%H:%M:%S")
     cursor.execute('UPDATE dbo.prova_log  SET tempo_finale = (%s) WHERE ID_UTENTE = (%s) AND data = (%s) AND tempo_iniziale = (%s)',(df_tempo_finale,session['id'],df_data_log,df_time_iniziale))
@@ -246,9 +233,8 @@ def logout():
     session.pop('loggedin', None)
     session.pop('id', None)
     session.pop('username', None)
-    #return redirect(url_for('login',_external=True,_scheme='https'))
-    return redirect(url_for('login'))
-    
+    return redirect(url_for('login',_external=True,_scheme='https'))
+    #return redirect(url_for('login'))
     
 
 @app.route("/graph")
@@ -328,9 +314,6 @@ def register():
         msg = 'Please fill out the form !'
         #qui faccio come prima per login.html ma con una pagina register
     return render_template('register.html', msg = msg)
-    
-"""
-if __name__ == '__main__':
-    
-    app.run(debug=True)
-"""
+
+
+
